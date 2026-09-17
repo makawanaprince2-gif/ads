@@ -12,6 +12,18 @@ No login, no accounts, no database.
   to `/api/ask` runs this file on Vercel's servers (not in the browser), so
   your Hugging Face token is never exposed to visitors.
 
+## Exam questions & image upload
+
+- Paste a full exam question or assignment into the box and it answers in
+  tutor mode: step-by-step, with the reasoning explained in plain language,
+  not just the final code.
+- Click **📎 Attach image** to upload a screenshot or photo of a question.
+  Text is extracted **in your browser** using Tesseract.js (an OCR library
+  loaded from a CDN) — the image itself is never uploaded anywhere, only
+  the extracted text ends up in the message box, and you can edit it before
+  sending. Works well for typed/printed text; handwriting and diagrams are
+  hit-or-miss since it's plain OCR, not a vision model.
+
 ## Memory model (important)
 
 - The conversation history lives in a single JavaScript variable in the
