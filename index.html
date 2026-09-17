@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
   :root {
     --bg: #14161c;
@@ -172,6 +173,33 @@
 
   .hint { font-size: 0.68rem; color: var(--text-dim); }
 
+  .left-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  #imageBtn {
+    font-family: inherit;
+    font-size: 0.78rem;
+    background: transparent;
+    color: var(--text-dim);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 0.35rem 0.7rem;
+    cursor: pointer;
+  }
+  #imageBtn:hover { border-color: var(--accent-dim); color: var(--text); }
+  #imageBtn:disabled { opacity: 0.5; cursor: default; }
+
+  .image-status {
+    font-size: 0.72rem;
+    color: var(--accent);
+    padding: 0 0.9rem 0.6rem;
+  }
+  .image-status.hidden { display: none; }
+  .image-status.error { color: var(--error); }
+
   button#askBtn {
     font-family: inherit;
     font-size: 0.85rem;
@@ -203,7 +231,7 @@
         </div>
         <button id="newChat" title="Clear this conversation">New chat</button>
       </div>
-      <p>Python, R/RStudio, ML, web design. Remembers earlier messages in this tab only — nothing is saved anywhere, so closing the tab clears everything.</p>
+      <p>Python, R/RStudio, ML, web design. Paste exam questions for step-by-step explanations, or attach a screenshot. Remembers this tab only — nothing is saved anywhere, so closing the tab clears everything.</p>
     </header>
 
     <div class="log" id="log">
@@ -211,9 +239,14 @@
     </div>
 
     <div class="cell">
-      <textarea id="question" rows="3" placeholder="e.g. Fix the loop in the code above so it handles an empty list, keep everything else the same"></textarea>
+      <textarea id="question" rows="3" placeholder="Paste a question, exam paper text, or attach a screenshot below"></textarea>
+      <div class="image-status hidden" id="imageStatus"></div>
       <div class="actions">
-        <span class="hint">Ctrl/Cmd + Enter to send</span>
+        <div class="left-actions">
+          <input type="file" id="imageInput" accept="image/*" hidden>
+          <button id="imageBtn" type="button">📎 Attach image</button>
+          <span class="hint">Ctrl/Cmd + Enter to send</span>
+        </div>
         <button id="askBtn">Send</button>
       </div>
     </div>
@@ -232,6 +265,9 @@
     const input = document.getElementById('question');
     const btn = document.getElementById('askBtn');
     const newChatBtn = document.getElementById('newChat');
+    const imageBtn = document.getElementById('imageBtn');
+    const imageInput = document.getElementById('imageInput');
+    const imageStatus = document.getElementById('imageStatus');
 
     function render() {
       log.innerHTML = '';
@@ -302,6 +338,49 @@
       messages = [];
       render();
     }
+
+    // Image → text: runs entirely in the browser (Tesseract.js), nothing is
+    // uploaded to any server. The extracted text just gets added to the
+    // textarea, same as if you'd typed it.
+    function setImageStatus(text, isError) {
+      imageStatus.textContent = text;
+      imageStatus.classList.toggle('error', !!isError);
+      imageStatus.classList.toggle('hidden', !text);
+    }
+
+    imageBtn.addEventListener('click', () => imageInput.click());
+
+    imageInput.addEventListener('change', async () => {
+      const file = imageInput.files[0];
+      if (!file) return;
+
+      imageBtn.disabled = true;
+      setImageStatus('Reading text from image… (first use downloads the OCR model, ~10s)');
+
+      try {
+        const result = await Tesseract.recognize(file, 'eng', {
+          logger: (m) => {
+            if (m.status === 'recognizing text') {
+              setImageStatus(`Reading text from image… ${Math.round(m.progress * 100)}%`);
+            }
+          }
+        });
+        const extracted = (result.data.text || '').trim();
+
+        if (!extracted) {
+          setImageStatus('No readable text found in that image.', true);
+        } else {
+          const prefix = input.value.trim() ? input.value.trim() + '\n\n' : '';
+          input.value = prefix + '--- extracted from image ---\n' + extracted;
+          setImageStatus('Text extracted — check it looks right below, then edit or send.');
+        }
+      } catch (err) {
+        setImageStatus('Could not read that image: ' + err.message, true);
+      } finally {
+        imageBtn.disabled = false;
+        imageInput.value = '';
+      }
+    });
 
     btn.addEventListener('click', ask);
     newChatBtn.addEventListener('click', newChat);
